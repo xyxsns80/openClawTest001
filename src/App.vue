@@ -526,6 +526,16 @@ export default {
         ctx.fillText(obj.icon, obj.x * ts + ts / 2, obj.y * ts + ts / 2);
       }
       
+      // 绘制关口（金色门）
+      ctx.font = `${ts - 4}px Arial`;
+      for (const gate of this.regionGates) {
+        if (gate.targetRegion < this.regionCount) {
+          // 检查当前区域敌人是否清空
+          const canPass = this.enemiesRemaining === 0;
+          ctx.fillText(canPass ? '🚪' : '🔒', gate.x * ts + ts / 2, gate.y * ts + ts / 2);
+        }
+      }
+      
       // 绘制英雄（大一点）
       ctx.font = `${ts - 2}px Arial`;
       ctx.fillText('🧙', this.hero.x * ts + ts / 2, this.hero.y * ts + ts / 2);
