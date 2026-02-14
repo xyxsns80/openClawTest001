@@ -360,13 +360,21 @@ export default {
     
     passGate(x, y) {
       const gate = this.regionGates.find(g => g.x === x && g.y === y);
-      if (gate && gate.targetRegion < this.regionCount) {
-        // 检查当前区域是否清空
-        if (this.enemiesRemaining > 0) {
-          this.addMessage('还有敌人，无法通过！');
-          return;
-        }
-        
+      if (!gate) return;
+      
+      // 检查当前区域是否清空
+      if (this.enemiesRemaining > 0) {
+        this.addMessage('还有敌人，无法通过！');
+        return;
+      }
+      
+      // 只能进入下一个区域
+      if (gate.targetRegion !== this.currentRegion + 1) {
+        this.addMessage('请先通过前面的区域！');
+        return;
+      }
+      
+      if (gate.targetRegion < this.regionCount) {
         this.currentRegion = gate.targetRegion;
         this.hero.y = y + 1;
         this.addMessage(`进入区域 ${this.currentRegion + 1}`);
@@ -526,14 +534,12 @@ export default {
         ctx.fillText(obj.icon, obj.x * ts + ts / 2, obj.y * ts + ts / 2);
       }
       
-      // 绘制关口（金色门）
+      // 绘制关口（金色门）- 只显示下一个可进入的关口
       ctx.font = `${ts - 4}px Arial`;
-      for (const gate of this.regionGates) {
-        if (gate.targetRegion < this.regionCount) {
-          // 检查当前区域敌人是否清空
-          const canPass = this.enemiesRemaining === 0;
-          ctx.fillText(canPass ? '🚪' : '🔒', gate.x * ts + ts / 2, gate.y * ts + ts / 2);
-        }
+      const nextGate = this.regionGates.find(g => g.targetRegion === this.currentRegion + 1);
+      if (nextGate) {
+        const canPass = this.enemiesRemaining === 0;
+        ctx.fillText(canPass ? '🚪' : '🔒', nextGate.x * ts + ts / 2, nextGate.y * ts + ts / 2);
       }
       
       // 绘制英雄（大一点）
