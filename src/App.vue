@@ -640,8 +640,9 @@ export default {
       this.keys[e.key] = false;
     },
     
-    // 触摸事件
+    // 触摸事件 - 改进的移动控制
     handleTouch(e) {
+      e.preventDefault();
       const touch = e.touches[0];
       const rect = this.canvas.getBoundingClientRect();
       const x = touch.clientX - rect.left;
@@ -653,12 +654,39 @@ export default {
       const tileX = Math.floor((x - offsetX) / this.tileSize);
       const tileY = Math.floor((y - offsetY) / this.tileSize);
       
-      // 移动到点击位置
-      const dx = Math.sign(tileX - this.hero.x);
-      const dy = Math.sign(tileY - this.hero.y);
+      const dx = tileX - this.hero.x;
+      const dy = tileY - this.hero.y;
       
-      if (dx !== 0) this.moveHero(dx, 0);
-      else if (dy !== 0) this.moveHero(0, dy);
+      // 根据点击方向决定移动方向（垂直方向优先）
+      if (Math.abs(dy) >= Math.abs(dx)) {
+        // 垂直移动优先
+        if (dy !== 0) this.moveHero(0, Math.sign(dy));
+      } else {
+        // 水平移动
+        if (dx !== 0) this.moveHero(Math.sign(dx), 0);
+      }
+    },
+    
+    // 点击事件（PC端）
+    handleClick(e) {
+      const rect = this.canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      const offsetX = (this.canvas.width - this.mapWidth * this.tileSize) / 2;
+      const offsetY = (this.canvas.height - this.mapHeight * this.tileSize) / 2;
+      
+      const tileX = Math.floor((x - offsetX) / this.tileSize);
+      const tileY = Math.floor((y - offsetY) / this.tileSize);
+      
+      const dx = tileX - this.hero.x;
+      const dy = tileY - this.hero.y;
+      
+      if (Math.abs(dy) >= Math.abs(dx)) {
+        if (dy !== 0) this.moveHero(0, Math.sign(dy));
+      } else {
+        if (dx !== 0) this.moveHero(Math.sign(dx), 0);
+      }
     }
   }
 }
