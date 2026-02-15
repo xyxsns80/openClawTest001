@@ -32,10 +32,43 @@
       <button @click="showArmy = !showArmy">⚔️部队</button>
       <button @click="showShop = !showShop">🏪商店</button>
       <button @click="showEquipment = !showEquipment">🎒装备</button>
-      <button @click="showEnhance = !showEnhance">⚒️强化</button>
+      <button @click="showDaily = !showDaily">📋任务</button>
       <button @click="showSkills = !showSkills">🔥技能</button>
       <button @click="autoBattle = !autoBattle" :class="{ active: autoBattle }">🤖自动</button>
       <button @click="saveGame">💾存档</button>
+    </div>
+    
+    <!-- 日常任务面板 -->
+    <div class="panel daily-panel" v-if="showDaily">
+      <div class="panel-header">
+        <span>📋 日常任务</span>
+        <button @click="showDaily = false">×</button>
+      </div>
+      <div class="daily-list">
+        <div class="daily-item" v-for="task in dailyTasks" :key="task.id" :class="{ completed: task.completed }">
+          <div class="task-info">
+            <span class="task-name">{{ task.name }}</span>
+            <div class="task-progress">
+              <div class="progress-bar-mini">
+                <div class="progress-fill" :style="{ width: Math.min(100, task.current / task.target * 100) + '%' }"></div>
+              </div>
+              <span class="progress-text">{{ task.current }}/{{ task.target }}</span>
+            </div>
+          </div>
+          <div class="task-reward">
+            <span v-if="task.reward.gold">💰{{ task.reward.gold }}</span>
+            <span v-if="task.reward.skillPoint">🔥+1</span>
+          </div>
+          <button 
+            v-if="task.current >= task.target && !task.completed" 
+            @click="claimTask(task)"
+            class="claim-btn"
+          >
+            领取
+          </button>
+          <span v-if="task.completed" class="completed-badge">✓</span>
+        </div>
+      </div>
     </div>
     
     <!-- 存档提示 -->
@@ -385,6 +418,7 @@ export default {
       showSkills: false,
       showAchievements: false,
       showEnhance: false,
+      showDaily: false,
       autoBattle: false, // 自动战斗模式
       showSaveToast: false,
       saveToastMsg: '',
@@ -413,6 +447,17 @@ export default {
         { id: 6, name: '军团长', icon: '⚔️', desc: '拥有5种兵种', condition: 'army5', unlocked: false, reward: 300 },
       ],
       totalGoldEarned: 0,
+      enemiesKilled: 0,
+      bossesKilled: 0,
+      
+      // 日常任务
+      dailyTasks: [
+        { id: 1, name: '击败10个敌人', target: 10, current: 0, reward: { gold: 100 }, completed: false },
+        { id: 2, name: '击败1个Boss', target: 1, current: 0, reward: { gold: 200, skillPoint: 1 }, completed: false },
+        { id: 3, name: '获得500金币', target: 500, current: 0, reward: { gold: 100 }, completed: false },
+        { id: 4, name: '升级1次', target: 1, current: 0, reward: { gold: 150 }, completed: false },
+        { id: 5, name: '招募任意兵种', target: 1, current: 0, reward: { gold: 80 }, completed: false },
+      ],
       
       // 英雄
       hero: {
@@ -988,7 +1033,9 @@ export default {
           this.addMessage(`🎉 击败Boss！获得丰厚奖励！`);
           this.resources.gold += 200;
           this.totalGoldEarned += 200;
+          this.bossesKilled++;
           this.checkAchievement('killFirstBoss');
+          this.updateTask('boss');
 
           // Boss必定掉落装备
           if (this.inventory.length < 12) {
@@ -1004,6 +1051,8 @@ export default {
         } else {
           // 普通敌人
           this.checkAchievement('killFirstEnemy');
+          this.enemiesKilled++;
+          this.updateTask('kill');
           
           // 5%几率掉落装备
           if (Math.random() < 0.05 && this.inventory.length < 12) {
@@ -1018,6 +1067,7 @@ export default {
         }
         
         this.totalGoldEarned += enemy.gold || 20;
+        this.updateTask('gold', enemy.gold || 20);
         if (this.totalGoldEarned >= 1000) this.checkAchievement('gold1000');
         if (this.army.length >= 5) this.checkAchievement('army5');
 
@@ -1049,6 +1099,7 @@ export default {
       }
       this.addMessage(`🎉 升级！Lv.${this.hero.level} 技能点+1`);
       if (this.hero.level >= 10) this.checkAchievement('level10');
+      this.updateTask('level');
     },
     
     travelTo(area) {
@@ -1091,10 +1142,11 @@ export default {
           attack: unit.attack,
           defense: unit.defense
         });
+        this.updateTask('recruit');
       }
-      this.addMessage(`招募 ${unit.name} x${unit.count}`);
+      this.addMessage(`招募 ${unit.icon} ${unit.name} x${unit.count}`);
     },
-
+    
     buyEquipment(eq) {
       if (this.resources.gold < eq.price) {
         this.addMessage('金币不足！');
@@ -1310,6 +1362,29 @@ export default {
       item.enhanceLevel = (item.enhanceLevel || 0) + 1;
       item.bonus += Math.ceil(item.bonus * 0.1); // 提升10%
       this.addMessage(`${item.icon} ${item.name} 强化至 Lv.${item.enhanceLevel}！`);
+    },
+    
+    // 日常任务
+    updateTask(type, amount = 1) {
+      for (const task of this.dailyTasks) {
+        if (task.completed) continue;
+        
+        if (type === 'kill' && task.id === 1) task.current += amount;
+        if (type === 'boss' && task.id === 2) task.current += amount;
+        if (type === 'gold' && task.id === 3) task.current += amount;
+        if (type === 'level' && task.id === 4) task.current += amount;
+        if (type === 'recruit' && task.id === 5) task.current += amount;
+      }
+    },
+    
+    claimTask(task) {
+      if (task.current < task.target || task.completed) return;
+      
+      task.completed = true;
+      if (task.reward.gold) this.resources.gold += task.reward.gold;
+      if (task.reward.skillPoint) this.skillPoints += task.reward.skillPoint;
+      
+      this.addMessage(`📋 任务完成！获得奖励！`);
     },
     
     // 存档系统
@@ -1988,4 +2063,34 @@ export default {
   font-weight: bold;
   z-index: 1000;
 }
+
+/* 日常任务样式 */
+.daily-panel { min-width: 300px; }
+.daily-list { display: flex; flex-direction: column; gap: 10px; }
+.daily-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.daily-item.completed { background: rgba(76,175,80,0.2); border-color: #4CAF50; }
+.task-info { flex: 1; }
+.task-name { font-size: 13px; margin-bottom: 5px; display: block; }
+.task-progress { display: flex; align-items: center; gap: 8px; }
+.progress-bar-mini { flex: 1; height: 6px; background: #333; border-radius: 3px; overflow: hidden; }
+.progress-text { font-size: 11px; color: #888; }
+.task-reward { font-size: 12px; color: #ffd700; }
+.claim-btn {
+  padding: 5px 12px;
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  border: none;
+  color: #333;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.completed-badge { color: #4CAF50; font-size: 18px; }
 </style>
