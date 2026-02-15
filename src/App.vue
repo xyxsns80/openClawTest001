@@ -34,6 +34,7 @@
       <button @click="showEquipment = !showEquipment">🎒装备</button>
       <button @click="showEnhance = !showEnhance">⚒️强化</button>
       <button @click="showSkills = !showSkills">🔥技能</button>
+      <button @click="autoBattle = !autoBattle" :class="{ active: autoBattle }">🤖自动</button>
       <button @click="saveGame">💾存档</button>
     </div>
     
@@ -377,6 +378,7 @@ export default {
       showSkills: false,
       showAchievements: false,
       showEnhance: false,
+      autoBattle: false, // 自动战斗模式
       showSaveToast: false,
       saveToastMsg: '',
       shopTab: 'units',
@@ -718,7 +720,55 @@ export default {
       this.update(dt);
       this.render();
       
+      // 自动战斗模式
+      if (this.autoBattle && !this.inBattle) {
+        this.autoMoveDelay = (this.autoMoveDelay || 0) - dt;
+        if (this.autoMoveDelay <= 0) {
+          this.autoMove();
+          this.autoMoveDelay = 300; // 300ms移动一次
+        }
+      }
+      
       this.animationFrame = requestAnimationFrame(this.gameLoop);
+    },
+    
+    autoMove() {
+      // 找到最近的敌人
+      let nearestEnemy = null;
+      let minDist = Infinity;
+      
+      for (const obj of this.mapObjects) {
+        if (obj.type === 'enemy') {
+          const dist = Math.abs(obj.x - this.hero.x) + Math.abs(obj.y - this.hero.y);
+          if (dist < minDist) {
+            minDist = dist;
+            nearestEnemy = obj;
+          }
+        }
+      }
+      
+      if (nearestEnemy) {
+        // 向敌人移动
+        const dx = Math.sign(nearestEnemy.x - this.hero.x);
+        const dy = Math.sign(nearestEnemy.y - this.hero.y);
+        
+        if (dx !== 0 && Math.random() > 0.5) {
+          this.moveHero(dx, 0);
+        } else if (dy !== 0) {
+          this.moveHero(0, dy);
+        } else if (dx !== 0) {
+          this.moveHero(dx, 0);
+        }
+      } else {
+        // 没有敌人，寻找关口
+        const nextGate = this.regionGates.find(g => g.targetRegion === this.currentRegion + 1);
+        if (nextGate && this.enemiesRemaining === 0) {
+          const dx = Math.sign(nextGate.x - this.hero.x);
+          const dy = Math.sign(nextGate.y - this.hero.y);
+          if (dx !== 0) this.moveHero(dx, 0);
+          else if (dy !== 0) this.moveHero(0, dy);
+        }
+      }
     },
     
     update(dt) {
@@ -1458,6 +1508,10 @@ export default {
   border: none;
   border-radius: 5px;
   font-size: 14px;
+}
+.bottom-bar button.active {
+  background: linear-gradient(135deg, #4CAF50, #8BC34A);
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
 }
 
 .panel {
