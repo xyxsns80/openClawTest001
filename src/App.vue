@@ -9,8 +9,12 @@
         <span class="hero-level">Lv.{{ hero.level }}</span>
         <div class="hp-bar">
           <div class="hp-fill" :style="{ width: (hero.hp / hero.maxHp * 100) + '%' }"></div>
+          <span class="hp-text">{{ hero.hp }}/{{ hero.maxHp }}</span>
         </div>
-        <span class="hero-stats-mini">⚔️{{ totalAttack }} 🛡️{{ totalDefense }}</span>
+        <div class="exp-bar">
+          <div class="exp-fill" :style="{ width: (hero.exp / hero.expToLevel * 100) + '%' }"></div>
+        </div>
+        <span class="hero-stats-mini">⚔️{{ totalAttack }} 🛡️{{ totalDefense }} 🔥{{ skillPoints }}</span>
       </div>
       <div class="resources">
         <span>💰{{ resources.gold }}</span>
@@ -840,11 +844,12 @@ export default {
       this.inBattle = true;
       this.battleLog = [];
       this.battleProgress = 0;
+      this.battleBuff = 1; // 重置战斗buff
       
       const enemyCount = enemy.isBoss ? 1 : (3 + Math.floor(Math.random() * 3));
       this.battleEnemies = [{ ...enemy, count: enemyCount }];
 
-      this.battleLog.push({ text: `遭遇 ${enemy.name}！`, type: 'info' });
+      this.battleLog.push({ text: `遭遇 ${enemy.name}${enemyCount > 1 ? ' x' + enemyCount : ''}！`, type: 'info' });
       
       if (enemy.isBoss) {
         this.battleLog.push({ text: `⚠️ Boss战！`, type: 'warning' });
@@ -971,6 +976,7 @@ export default {
 
       this.inBattle = false;
       this.battleEnemies = [];
+      this.skills.forEach(s => s.currentCd = 0); // 重置技能冷却
     },
     
     levelUp() {
@@ -1375,6 +1381,36 @@ export default {
 .hero-info { display: flex; align-items: center; gap: 10px; }
 .hero-name { color: #ffd700; font-weight: bold; }
 .hero-level { color: #7fff7f; }
+
+.hp-bar { 
+  width: 100px; 
+  height: 12px; 
+  background: #333; 
+  border-radius: 6px; 
+  overflow: hidden; 
+  position: relative;
+}
+.hp-text {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 9px;
+  color: white;
+  text-shadow: 0 0 2px black;
+}
+.exp-bar { 
+  width: 80px; 
+  height: 4px; 
+  background: #333; 
+  border-radius: 2px; 
+  overflow: hidden; 
+}
+.exp-fill { 
+  height: 100%; 
+  background: linear-gradient(90deg, #4CAF50, #8BC34A); 
+  transition: width 0.3s; 
+}
 .hero-stats-mini { font-size: 11px; color: #aaa; }
 .hp-bar {
   width: 80px;
