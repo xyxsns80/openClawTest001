@@ -29,6 +29,66 @@
       <button @click="showShop = !showShop">🏪商店</button>
       <button @click="showEquipment = !showEquipment">🎒装备</button>
       <button @click="showMap = !showMap">🗺️地图</button>
+      <button @click="showSkills = !showSkills">🔥技能</button>
+    </div>
+    
+    <!-- 技能栏（战斗中显示） -->
+    <div class="skill-bar" v-if="inBattle">
+      <div 
+        class="skill-slot" 
+        v-for="skill in skills.filter(s => s.unlocked)" 
+        :key="skill.id"
+        :class="{ disabled: skill.currentCd > 0 }"
+        @click="useSkill(skill)"
+      >
+        <span class="skill-icon">{{ skill.icon }}</span>
+        <span class="skill-cd" v-if="skill.currentCd > 0">{{ skill.currentCd }}</span>
+      </div>
+    </div>
+    
+    <!-- 技能面板 -->
+    <div class="panel" v-if="showSkills">
+      <div class="panel-header">
+        <span>🔥 技能 (点数: {{ skillPoints }})</span>
+        <button @click="showSkills = false">×</button>
+      </div>
+      <div class="skill-list">
+        <div class="skill-item" v-for="skill in skills" :key="skill.id">
+          <span class="skill-icon">{{ skill.icon }}</span>
+          <div class="skill-info">
+            <span class="skill-name">{{ skill.name }}</span>
+            <span class="skill-desc">{{ skill.desc }}</span>
+            <span class="skill-cd-info">冷却: {{ skill.cooldown }}回合</span>
+          </div>
+          <button 
+            v-if="!skill.unlocked && skillPoints > 0" 
+            @click="unlockSkill(skill)"
+            class="unlock-btn"
+          >
+            解锁
+          </button>
+          <span v-if="skill.unlocked" class="unlocked-badge">✓</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 成就面板 -->
+    <div class="panel" v-if="showAchievements">
+      <div class="panel-header">
+        <span>🏆 成就</span>
+        <button @click="showAchievements = false">×</button>
+      </div>
+      <div class="achievement-list">
+        <div class="achievement-item" v-for="ach in achievements" :key="ach.id" :class="{ unlocked: ach.unlocked }">
+          <span class="ach-icon">{{ ach.icon }}</span>
+          <div class="ach-info">
+            <span class="ach-name">{{ ach.name }}</span>
+            <span class="ach-desc">{{ ach.desc }}</span>
+          </div>
+          <span class="ach-reward" v-if="ach.unlocked">✓</span>
+          <span class="ach-reward" v-else>{{ ach.rewardType === 'skillPoint' ? '技能点' : '💰' + ach.reward }}</span>
+        </div>
+      </div>
     </div>
     
     <!-- 部队面板 -->
@@ -276,10 +336,33 @@ export default {
       showMap: false,
       showShop: false,
       showEquipment: false,
+      showSkills: false,
+      showAchievements: false,
       shopTab: 'units',
       inBattle: false,
       messages: [],
       selectedUnit: null,
+      
+      // 技能系统
+      skills: [
+        { id: 1, name: '火焰冲击', icon: '🔥', desc: '造成200%攻击伤害', cooldown: 3, currentCd: 0, unlocked: true },
+        { id: 2, name: '雷霆一击', icon: '⚡', desc: '造成150%伤害+眩晕', cooldown: 5, currentCd: 0, unlocked: false },
+        { id: 3, name: '治愈之光', icon: '💚', desc: '恢复30%最大HP', cooldown: 4, currentCd: 0, unlocked: false },
+        { id: 4, name: '战吼', icon: '📢', desc: '本次战斗攻击+50%', cooldown: 6, currentCd: 0, unlocked: false },
+      ],
+      skillPoints: 0,
+      battleBuff: 1,
+      
+      // 成就系统
+      achievements: [
+        { id: 1, name: '初出茅庐', icon: '🗡️', desc: '击败第一个敌人', condition: 'killFirstEnemy', unlocked: false, reward: 50 },
+        { id: 2, name: '屠龙者', icon: '🐉', desc: '击败第一个Boss', condition: 'killFirstBoss', unlocked: false, reward: 200 },
+        { id: 3, name: '富甲一方', icon: '💰', desc: '累计获得1000金币', condition: 'gold1000', unlocked: false, reward: 1, rewardType: 'skillPoint' },
+        { id: 4, name: '老兵', icon: '⭐', desc: '达到10级', condition: 'level10', unlocked: false, reward: 2, rewardType: 'skillPoint' },
+        { id: 5, name: '征服者', icon: '👑', desc: '通关第一个区域', condition: 'completeArea', unlocked: false, rewardType: 'legendary' },
+        { id: 6, name: '军团长', icon: '⚔️', desc: '拥有5种兵种', condition: 'army5', unlocked: false, reward: 300 },
+      ],
+      totalGoldEarned: 0,
       
       // 英雄
       hero: {
@@ -789,6 +872,8 @@ export default {
         if (enemy.isBoss) {
           this.addMessage(`🎉 击败Boss！获得丰厚奖励！`);
           this.resources.gold += 200;
+          this.totalGoldEarned += 200;
+          this.checkAchievement('killFirstBoss');
 
           // Boss必定掉落装备
           if (this.inventory.length < 12) {
@@ -802,7 +887,10 @@ export default {
             this.addMessage(`掉落: ${drop.icon} ${drop.name}`);
           }
         } else {
-          // 普通敌人5%几率掉落装备
+          // 普通敌人
+          this.checkAchievement('killFirstEnemy');
+          
+          // 5%几率掉落装备
           if (Math.random() < 0.05 && this.inventory.length < 12) {
             const drops = [
               { name: '破损的剑', icon: '🗡️', type: '攻击', bonus: 3, price: 30, slot: 'weapon', isEquipment: true },
@@ -813,6 +901,10 @@ export default {
             this.addMessage(`掉落: ${drop.icon} ${drop.name}`);
           }
         }
+        
+        this.totalGoldEarned += enemy.gold || 20;
+        if (this.totalGoldEarned >= 1000) this.checkAchievement('gold1000');
+        if (this.army.length >= 5) this.checkAchievement('army5');
 
         if (this.hero.exp >= this.hero.expToLevel) {
           this.levelUp();
@@ -829,13 +921,18 @@ export default {
     },
     
     levelUp() {
-      this.hero.level++;
-      this.hero.exp -= this.hero.expToLevel;
-      this.hero.expToLevel = Math.floor(this.hero.expToLevel * 1.5);
-      this.hero.maxHp += 10;
-      this.hero.hp = this.hero.maxHp;
-      this.hero.attack += 2;
-      this.addMessage(`升级！Lv.${this.hero.level}`);
+      while (this.hero.exp >= this.hero.expToLevel) {
+        this.hero.exp -= this.hero.expToLevel;
+        this.hero.level++;
+        this.hero.maxHp += 10;
+        this.hero.hp = this.hero.maxHp;
+        this.hero.attack += 2;
+        this.hero.defense += 1;
+        this.hero.expToLevel = Math.floor(this.hero.expToLevel * 1.5);
+        this.skillPoints++;
+      }
+      this.addMessage(`🎉 升级！Lv.${this.hero.level} 技能点+1`);
+      if (this.hero.level >= 10) this.checkAchievement('level10');
     },
     
     travelTo(area) {
@@ -950,7 +1047,7 @@ export default {
         this.inventory.splice(index, 1);
       }
     },
-    
+
     // 渲染
     render() {
       const ctx = this.ctx;
@@ -1009,6 +1106,64 @@ export default {
     
     showUnitInfo(unit) {
       this.selectedUnit = unit;
+    },
+    
+    // 技能系统
+    unlockSkill(skill) {
+      if (this.skillPoints > 0 && !skill.unlocked) {
+        skill.unlocked = true;
+        this.skillPoints--;
+        this.addMessage(`解锁技能: ${skill.icon} ${skill.name}`);
+      }
+    },
+    
+    useSkill(skill) {
+      if (!this.inBattle || skill.currentCd > 0) return;
+      
+      const enemy = this.battleEnemies[0];
+      if (!enemy) return;
+      
+      switch(skill.id) {
+        case 1: // 火焰冲击
+          const fireDmg = Math.floor(this.totalAttack * 2 * this.battleBuff);
+          this.battleLog.push({ text: `🔥 火焰冲击！造成 ${fireDmg} 火焰伤害！`, type: 'our' });
+          break;
+        case 2: // 雷霆一击
+          const thunderDmg = Math.floor(this.totalAttack * 1.5 * this.battleBuff);
+          this.battleLog.push({ text: `⚡ 雷霆一击！造成 ${thunderDmg} 伤害，敌人眩晕！`, type: 'our' });
+          break;
+        case 3: // 治愈之光
+          const heal = Math.floor(this.hero.maxHp * 0.3);
+          this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + heal);
+          this.battleLog.push({ text: `💚 治愈之光！恢复 ${heal} HP！`, type: 'our' });
+          break;
+        case 4: // 战吼
+          this.battleBuff = 1.5;
+          this.battleLog.push({ text: `📢 战吼！攻击力提升50%！`, type: 'our' });
+          break;
+      }
+      
+      skill.currentCd = skill.cooldown;
+    },
+    
+    checkAchievement(condition) {
+      const ach = this.achievements.find(a => a.condition === condition && !a.unlocked);
+      if (!ach) return;
+      
+      ach.unlocked = true;
+      this.addMessage(`🏆 成就解锁: ${ach.icon} ${ach.name}！`);
+      
+      if (ach.rewardType === 'skillPoint') {
+        this.skillPoints += ach.reward || 1;
+        this.addMessage(`获得技能点 +${ach.reward || 1}`);
+      } else if (ach.rewardType === 'legendary') {
+        const legendary = { name: '传奇之刃', icon: '⚔️', type: '攻击', bonus: 30, price: 1000, slot: 'weapon', isEquipment: true };
+        this.inventory.push(legendary);
+        this.addMessage(`获得传奇装备: ${legendary.icon} ${legendary.name}`);
+      } else {
+        this.resources.gold += ach.reward;
+        this.addMessage(`获得金币 +${ach.reward}`);
+      }
     },
     
     handleKeyDown(e) { this.keys[e.key] = true; },
@@ -1245,6 +1400,84 @@ export default {
 .item-name { font-weight: bold; }
 .item-stats { font-size: 11px; opacity: 0.7; }
 .item-price { color: #ffd700; font-weight: bold; }
+
+/* 技能栏样式 */
+.skill-bar {
+  position: absolute;
+  bottom: 70px;
+  right: 10px;
+  display: flex;
+  gap: 8px;
+}
+.skill-slot {
+  width: 50px;
+  height: 50px;
+  background: rgba(30,30,50,0.9);
+  border: 2px solid #667eea;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+}
+.skill-slot:hover { background: rgba(102,126,234,0.3); }
+.skill-slot.disabled { opacity: 0.5; cursor: not-allowed; }
+.skill-icon { font-size: 24px; }
+.skill-cd {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 12px;
+  color: #ff4444;
+  font-weight: bold;
+}
+
+/* 技能面板样式 */
+.skill-list { display: flex; flex-direction: column; gap: 8px; }
+.skill-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 8px;
+}
+.skill-item .skill-icon { font-size: 28px; }
+.skill-info { flex: 1; display: flex; flex-direction: column; }
+.skill-name { font-weight: bold; }
+.skill-desc { font-size: 11px; color: #888; }
+.skill-cd-info { font-size: 10px; color: #667eea; }
+.unlock-btn {
+  padding: 5px 10px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.unlocked-badge { color: #7fff7f; font-size: 18px; }
+
+/* 成就面板样式 */
+.achievement-list { display: flex; flex-direction: column; gap: 8px; }
+.achievement-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.achievement-item.unlocked { 
+  background: rgba(102,126,234,0.2); 
+  border-color: #ffd700;
+}
+.ach-icon { font-size: 28px; }
+.ach-info { flex: 1; display: flex; flex-direction: column; }
+.ach-name { font-weight: bold; }
+.ach-desc { font-size: 11px; color: #888; }
+.ach-reward { color: #ffd700; font-size: 12px; }
 
 /* 装备面板样式 */
 .equipment-panel { min-width: 300px; max-height: 80vh; overflow-y: auto; }
