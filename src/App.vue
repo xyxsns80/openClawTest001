@@ -10,6 +10,7 @@
         <div class="hp-bar">
           <div class="hp-fill" :style="{ width: (hero.hp / hero.maxHp * 100) + '%' }"></div>
         </div>
+        <span class="hero-stats-mini">⚔️{{ totalAttack }} 🛡️{{ totalDefense }}</span>
       </div>
       <div class="resources">
         <span>💰{{ resources.gold }}</span>
@@ -25,6 +26,8 @@
     <!-- 底部操作栏 -->
     <div class="bottom-bar">
       <button @click="showArmy = !showArmy">⚔️部队</button>
+      <button @click="showShop = !showShop">🏪商店</button>
+      <button @click="showEquipment = !showEquipment">🎒装备</button>
       <button @click="showMap = !showMap">🗺️地图</button>
     </div>
     
@@ -43,6 +46,100 @@
       </div>
     </div>
     
+    <!-- 商店面板 -->
+    <div class="panel shop-panel" v-if="showShop">
+      <div class="panel-header">
+        <span>🏪 商店</span>
+        <button @click="showShop = false">×</button>
+      </div>
+      <div class="shop-tabs">
+        <button :class="{ active: shopTab === 'units' }" @click="shopTab = 'units'">兵种</button>
+        <button :class="{ active: shopTab === 'equipment' }" @click="shopTab = 'equipment'">装备</button>
+        <button :class="{ active: shopTab === 'items' }" @click="shopTab = 'items'">道具</button>
+      </div>
+      <div class="shop-items" v-if="shopTab === 'units'">
+        <div class="shop-item" v-for="unit in shopUnits" :key="unit.id" @click="buyUnit(unit)">
+          <span class="item-icon">{{ unit.icon }}</span>
+          <div class="item-info">
+            <span class="item-name">{{ unit.name }}</span>
+            <span class="item-stats">攻:{{ unit.attack }} 防:{{ unit.defense }}</span>
+          </div>
+          <span class="item-price">💰{{ unit.price }}</span>
+        </div>
+      </div>
+      <div class="shop-items" v-if="shopTab === 'equipment'">
+        <div class="shop-item" v-for="eq in shopEquipment" :key="eq.id" @click="buyEquipment(eq)">
+          <span class="item-icon">{{ eq.icon }}</span>
+          <div class="item-info">
+            <span class="item-name">{{ eq.name }}</span>
+            <span class="item-stats">{{ eq.type }} +{{ eq.bonus }}</span>
+          </div>
+          <span class="item-price">💰{{ eq.price }}</span>
+        </div>
+      </div>
+      <div class="shop-items" v-if="shopTab === 'items'">
+        <div class="shop-item" v-for="item in shopItems" :key="item.id" @click="buyItem(item)">
+          <span class="item-icon">{{ item.icon }}</span>
+          <div class="item-info">
+            <span class="item-name">{{ item.name }}</span>
+            <span class="item-stats">{{ item.desc }}</span>
+          </div>
+          <span class="item-price">💰{{ item.price }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 装备面板 -->
+    <div class="panel equipment-panel" v-if="showEquipment">
+      <div class="panel-header">
+        <span>🎒 装备 & 背包</span>
+        <button @click="showEquipment = false">×</button>
+      </div>
+      <div class="equipped-section">
+        <div class="section-title">已装备</div>
+        <div class="equipped-slots">
+          <div class="equip-slot" :class="{ empty: !hero.equipment.weapon }">
+            <span class="slot-label">武器</span>
+            <span v-if="hero.equipment.weapon">{{ hero.equipment.weapon.icon }} {{ hero.equipment.weapon.name }}</span>
+            <span v-else class="empty-slot">空</span>
+          </div>
+          <div class="equip-slot" :class="{ empty: !hero.equipment.armor }">
+            <span class="slot-label">护甲</span>
+            <span v-if="hero.equipment.armor">{{ hero.equipment.armor.icon }} {{ hero.equipment.armor.name }}</span>
+            <span v-else class="empty-slot">空</span>
+          </div>
+          <div class="equip-slot" :class="{ empty: !hero.equipment.accessory }">
+            <span class="slot-label">饰品</span>
+            <span v-if="hero.equipment.accessory">{{ hero.equipment.accessory.icon }} {{ hero.equipment.accessory.name }}</span>
+            <span v-else class="empty-slot">空</span>
+          </div>
+        </div>
+      </div>
+      <div class="inventory-section">
+        <div class="section-title">背包</div>
+        <div class="inventory-grid">
+          <div 
+            class="inventory-item" 
+            v-for="(item, i) in inventory" 
+            :key="i"
+            @click="useItem(item, i)"
+          >
+            {{ item.icon }} {{ item.name }}
+          </div>
+          <div v-if="inventory.length === 0" class="empty-inventory">空空如也</div>
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div class="section-title">英雄属性</div>
+        <div class="stats-grid">
+          <span>攻击: {{ totalAttack }}</span>
+          <span>防御: {{ totalDefense }}</span>
+          <span>生命: {{ hero.maxHp }}</span>
+          <span>暴击: {{ hero.crit || 0 }}%</span>
+        </div>
+      </div>
+    </div>
+
     <!-- 地图面板 -->
     <div class="panel" v-if="showMap">
       <div class="panel-header">
@@ -65,17 +162,57 @@
     
     <!-- 战斗界面 -->
     <div class="battle-overlay" v-if="inBattle">
-      <div class="battle-title">⚔️ 战斗中</div>
-      <div class="battle-units">
-        <div class="our-side">
-          <div v-for="(unit, i) in army" :key="'a'+i" class="battle-unit">
-            {{ unit.icon }} x{{ unit.count }}
+      <div class="battle-box">
+        <div class="battle-title">⚔️ 战斗</div>
+        
+        <div class="battle-sides">
+          <!-- 我方 -->
+          <div class="battle-side our-side">
+            <div class="side-label">我方战力: {{ ourBattlePower }}</div>
+            <div class="hero-card">
+              <span class="card-icon">🧙</span>
+              <div class="card-info">
+                <span class="card-name">{{ hero.name }} Lv.{{ hero.level }}</span>
+                <div class="hp-bar-mini">
+                  <div class="hp-fill" :style="{ width: (hero.hp / hero.maxHp * 100) + '%' }"></div>
+                </div>
+              </div>
+            </div>
+            <div class="unit-cards">
+              <div class="unit-card" v-for="(unit, i) in army" :key="'a'+i">
+                <span class="card-icon">{{ unit.icon }}</span>
+                <span class="card-count">x{{ unit.count }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="battle-vs">⚔️</div>
+          
+          <!-- 敌方 -->
+          <div class="battle-side enemy-side">
+            <div class="side-label">敌方战力: {{ enemyBattlePower }}</div>
+            <div class="unit-cards">
+              <div class="unit-card enemy" v-for="(e, i) in battleEnemies" :key="'e'+i">
+                <span class="card-icon">{{ e.icon }}</span>
+                <span class="card-name">{{ e.name }}</span>
+                <span class="card-count">x{{ e.count }}</span>
+                <span class="boss-badge" v-if="e.isBoss">BOSS</span>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="vs">VS</div>
-        <div class="enemy-side">
-          <div v-for="(e, i) in battleEnemies" :key="'e'+i" class="battle-unit enemy">
-            {{ e.icon }} x{{ e.count }}
+        
+        <!-- 战斗日志 -->
+        <div class="battle-log">
+          <div v-for="(log, i) in battleLog" :key="i" :class="['log-item', log.type]">
+            {{ log.text }}
+          </div>
+        </div>
+        
+        <!-- 战斗进度条 -->
+        <div class="battle-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: battleProgress + '%' }"></div>
           </div>
         </div>
       </div>
@@ -103,6 +240,9 @@ export default {
       
       showArmy: false,
       showMap: false,
+      showShop: false,
+      showEquipment: false,
+      shopTab: 'units',
       inBattle: false,
       messages: [],
       
@@ -114,11 +254,49 @@ export default {
         maxHp: 100,
         attack: 10,
         defense: 5,
+        crit: 5,
         x: 5,
         y: 5,
         exp: 0,
-        expToLevel: 100
+        expToLevel: 100,
+        equipment: {
+          weapon: null,
+          armor: null,
+          accessory: null
+        }
       },
+
+      // 背包
+      inventory: [],
+
+      // 商店 - 兵种
+      shopUnits: [
+        { id: 1, name: '步兵', icon: '🗡️', attack: 5, defense: 3, price: 50, count: 5 },
+        { id: 2, name: '弓箭手', icon: '🏹', attack: 8, defense: 2, price: 80, count: 3 },
+        { id: 3, name: '骑士', icon: '🐴', attack: 12, defense: 8, price: 150, count: 2 },
+        { id: 4, name: '法师', icon: '🔮', attack: 15, defense: 1, price: 200, count: 2 },
+        { id: 5, name: '天使', icon: '👼', attack: 25, defense: 15, price: 500, count: 1 },
+      ],
+
+      // 商店 - 装备
+      shopEquipment: [
+        { id: 1, name: '铁剑', icon: '⚔️', type: '攻击', bonus: 5, price: 100, slot: 'weapon' },
+        { id: 2, name: '钢剑', icon: '🗡️', type: '攻击', bonus: 12, price: 300, slot: 'weapon' },
+        { id: 3, name: '传说之剑', icon: '⚡', type: '攻击', bonus: 25, price: 800, slot: 'weapon' },
+        { id: 4, name: '皮甲', icon: '🛡️', type: '防御', bonus: 5, price: 100, slot: 'armor' },
+        { id: 5, name: '板甲', icon: '🛡️', type: '防御', bonus: 15, price: 350, slot: 'armor' },
+        { id: 6, name: '龙鳞甲', icon: '🐉', type: '防御', bonus: 30, price: 900, slot: 'armor' },
+        { id: 7, name: '幸运戒指', icon: '💍', type: '暴击', bonus: 10, price: 200, slot: 'accessory' },
+        { id: 8, name: '力量项链', icon: '📿', type: '攻击', bonus: 8, price: 250, slot: 'accessory' },
+      ],
+
+      // 商店 - 道具
+      shopItems: [
+        { id: 1, name: '生命药水', icon: '🧪', desc: '恢复50HP', price: 30, effect: { heal: 50 } },
+        { id: 2, name: '大生命药水', icon: '⚗️', desc: '恢复100HP', price: 60, effect: { heal: 100 } },
+        { id: 3, name: '经验卷轴', icon: '📜', desc: '+50经验', price: 100, effect: { exp: 50 } },
+        { id: 4, name: '召唤卷轴', icon: '📃', desc: '召唤步兵x10', price: 80, effect: { summon: 'infantry' } },
+      ],
       
       // 资源
       resources: { gold: 100 },
@@ -146,8 +324,10 @@ export default {
         { id: 4, name: '魔王城', icon: '🏰', level: 10, unlocked: false },
       ],
       
-      // 战斗
+      // 战斗相关
       battleEnemies: [],
+      battleLog: [],
+      battleProgress: 0,
       
       // 动画
       animationFrame: null,
@@ -159,6 +339,25 @@ export default {
   computed: {
     enemiesRemaining() {
       return this.mapObjects.filter(o => o.type === 'enemy').length;
+    },
+    totalAttack() {
+      let atk = this.hero.attack;
+      if (this.hero.equipment.weapon) atk += this.hero.equipment.weapon.bonus;
+      if (this.hero.equipment.accessory && this.hero.equipment.accessory.type === '攻击') {
+        atk += this.hero.equipment.accessory.bonus;
+      }
+      return atk;
+    },
+    totalDefense() {
+      let def = this.hero.defense;
+      if (this.hero.equipment.armor) def += this.hero.equipment.armor.bonus;
+      return def;
+    },
+    ourBattlePower() {
+      return this.army.reduce((s, u) => s + u.attack * u.count, 0) + this.totalAttack;
+    },
+    enemyBattlePower() {
+      return this.battleEnemies.reduce((s, e) => s + e.attack * (e.count || 1), 0);
     }
   },
   mounted() {
@@ -285,7 +484,30 @@ export default {
         { name: '兽人', icon: '👹', hp: 40, attack: 10, exp: 25, gold: 40 },
       ];
       
-      const count = 5 + level * 2;
+      // Boss列表
+      const bosses = [
+        { name: '哥布林王', icon: '👑', hp: 100, attack: 15, exp: 100, gold: 200, isBoss: true },
+        { name: '森林巨魔', icon: '🌳', hp: 150, attack: 20, exp: 150, gold: 300, isBoss: true },
+        { name: '石像巨人', icon: '🗿', hp: 200, attack: 25, exp: 200, gold: 400, isBoss: true },
+        { name: '魔王', icon: '😈', hp: 500, attack: 50, exp: 1000, gold: 2000, isBoss: true },
+      ];
+
+      // 最后一个区域放Boss
+      if (this.currentRegion === this.regionCount - 1) {
+        const areaIndex = this.worldMap.findIndex(a => a.id === this.currentArea.id);
+        const boss = bosses[Math.min(areaIndex, bosses.length - 1)];
+        const pos = this.findEmptyTile(true);
+        if (pos) {
+          this.mapObjects.push({
+            type: 'enemy',
+            ...boss,
+            x: pos.x,
+            y: pos.y
+          });
+        }
+      }
+
+      const count = 3 + level * 2;
       for (let i = 0; i < count; i++) {
         const pos = this.findEmptyTile(true);
         if (pos) {
@@ -439,30 +661,107 @@ export default {
     
     startBattle(enemy) {
       this.inBattle = true;
-      this.battleEnemies = [{ ...enemy, count: 3 + Math.floor(Math.random() * 3) }];
+      this.battleLog = [];
+      this.battleProgress = 0;
       
-      setTimeout(() => this.resolveBattle(enemy), 1500);
+      const enemyCount = enemy.isBoss ? 1 : (3 + Math.floor(Math.random() * 3));
+      this.battleEnemies = [{ ...enemy, count: enemyCount }];
+
+      this.battleLog.push({ text: `遭遇 ${enemy.name}！`, type: 'info' });
+      
+      if (enemy.isBoss) {
+        this.battleLog.push({ text: `⚠️ Boss战！`, type: 'warning' });
+      }
+
+      // 战斗动画
+      this.animateBattle(enemy);
+    },
+    
+    animateBattle(enemy) {
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 10;
+        this.battleProgress = progress;
+        
+        // 添加战斗日志
+        if (progress === 30) {
+          this.battleLog.push({ text: `我方发起攻击...`, type: 'our' });
+        }
+        if (progress === 50) {
+          const damage = Math.floor(this.ourBattlePower * 0.3);
+          this.battleLog.push({ text: `造成 ${damage} 点伤害！`, type: 'our' });
+        }
+        if (progress === 70) {
+          this.battleLog.push({ text: `敌方反击...`, type: 'enemy' });
+        }
+        if (progress === 90) {
+          const enemyDmg = Math.floor(this.enemyBattlePower * 0.2);
+          this.battleLog.push({ text: `受到 ${enemyDmg} 点伤害！`, type: 'enemy' });
+        }
+        
+        if (progress >= 100) {
+          clearInterval(interval);
+          this.resolveBattle(enemy);
+        }
+      }, 150);
     },
     
     resolveBattle(enemy) {
-      const ourPower = this.army.reduce((s, u) => s + u.attack * u.count, 0) + this.hero.attack;
-      const theirPower = this.battleEnemies.reduce((s, e) => s + e.attack * e.count, 0);
-      
-      if (ourPower > theirPower) {
-        this.addMessage(`胜利！+${enemy.exp} 经验`);
-        this.hero.exp += enemy.exp;
+      const ourPower = this.army.reduce((s, u) => s + u.attack * u.count, 0) + this.totalAttack;
+      let theirPower = this.battleEnemies.reduce((s, e) => s + e.attack * e.count, 0);
+
+      // 暴击判定
+      let critMultiplier = 1;
+      if (Math.random() * 100 < (this.hero.crit || 0)) {
+        critMultiplier = 2;
+        this.addMessage('💥 暴击！');
+      }
+
+      if (ourPower * critMultiplier > theirPower) {
+        const expGain = enemy.exp * critMultiplier;
+        this.addMessage(`胜利！+${Math.floor(expGain)} 经验`);
+        this.hero.exp += Math.floor(expGain);
         this.resources.gold += enemy.gold || 20;
-        
+
+        // Boss战额外奖励
+        if (enemy.isBoss) {
+          this.addMessage(`🎉 击败Boss！获得丰厚奖励！`);
+          this.resources.gold += 200;
+
+          // Boss必定掉落装备
+          if (this.inventory.length < 12) {
+            const drops = [
+              { name: '传奇武器', icon: '⚔️', type: '攻击', bonus: 15, price: 500, slot: 'weapon', isEquipment: true },
+              { name: '传奇护甲', icon: '🛡️', type: '防御', bonus: 20, price: 500, slot: 'armor', isEquipment: true },
+              { name: '龙之戒', icon: '💍', type: '暴击', bonus: 15, price: 400, slot: 'accessory', isEquipment: true },
+            ];
+            const drop = drops[Math.floor(Math.random() * drops.length)];
+            this.inventory.push(drop);
+            this.addMessage(`掉落: ${drop.icon} ${drop.name}`);
+          }
+        } else {
+          // 普通敌人5%几率掉落装备
+          if (Math.random() < 0.05 && this.inventory.length < 12) {
+            const drops = [
+              { name: '破损的剑', icon: '🗡️', type: '攻击', bonus: 3, price: 30, slot: 'weapon', isEquipment: true },
+              { name: '旧护甲', icon: '🛡️', type: '防御', bonus: 3, price: 30, slot: 'armor', isEquipment: true },
+            ];
+            const drop = drops[Math.floor(Math.random() * drops.length)];
+            this.inventory.push(drop);
+            this.addMessage(`掉落: ${drop.icon} ${drop.name}`);
+          }
+        }
+
         if (this.hero.exp >= this.hero.expToLevel) {
           this.levelUp();
         }
-        
+
         this.mapObjects = this.mapObjects.filter(o => o !== enemy);
       } else {
         this.addMessage('战败...失去金币');
         this.resources.gold = Math.max(0, this.resources.gold - 30);
       }
-      
+
       this.inBattle = false;
       this.battleEnemies = [];
     },
@@ -491,6 +790,103 @@ export default {
     addMessage(msg) {
       this.messages.push(msg);
       if (this.messages.length > 5) this.messages.shift();
+    },
+
+    // 商店系统
+    buyUnit(unit) {
+      if (this.resources.gold < unit.price) {
+        this.addMessage('金币不足！');
+        return;
+      }
+      if (this.army.length >= 7) {
+        this.addMessage('部队已满！');
+        return;
+      }
+
+      this.resources.gold -= unit.price;
+      const existing = this.army.find(u => u.name === unit.name);
+      if (existing) {
+        existing.count += unit.count;
+      } else {
+        this.army.push({
+          id: Date.now(),
+          name: unit.name,
+          icon: unit.icon,
+          count: unit.count,
+          attack: unit.attack,
+          defense: unit.defense
+        });
+      }
+      this.addMessage(`招募 ${unit.name} x${unit.count}`);
+    },
+
+    buyEquipment(eq) {
+      if (this.resources.gold < eq.price) {
+        this.addMessage('金币不足！');
+        return;
+      }
+
+      this.resources.gold -= eq.price;
+      this.inventory.push({ ...eq, isEquipment: true });
+      this.addMessage(`购买 ${eq.name}`);
+    },
+
+    buyItem(item) {
+      if (this.resources.gold < item.price) {
+        this.addMessage('金币不足！');
+        return;
+      }
+      if (this.inventory.length >= 12) {
+        this.addMessage('背包已满！');
+        return;
+      }
+
+      this.resources.gold -= item.price;
+      this.inventory.push({ ...item, isItem: true });
+      this.addMessage(`购买 ${item.name}`);
+    },
+
+    useItem(item, index) {
+      if (item.isEquipment) {
+        // 装备物品
+        const oldEquip = this.hero.equipment[item.slot];
+        this.hero.equipment[item.slot] = item;
+        this.inventory.splice(index, 1);
+        if (oldEquip) {
+          this.inventory.push(oldEquip);
+        }
+        this.addMessage(`装备 ${item.name}`);
+      } else if (item.isItem) {
+        // 使用道具
+        if (item.effect.heal) {
+          this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + item.effect.heal);
+          this.addMessage(`恢复 ${item.effect.heal} HP`);
+        }
+        if (item.effect.exp) {
+          this.hero.exp += item.effect.exp;
+          this.addMessage(`+${item.effect.exp} 经验`);
+          if (this.hero.exp >= this.hero.expToLevel) {
+            this.levelUp();
+          }
+        }
+        if (item.effect.summon) {
+          const existing = this.army.find(u => u.name === '步兵');
+          if (existing) {
+            existing.count += 10;
+          } else if (this.army.length < 7) {
+            this.army.push({
+              id: Date.now(),
+              name: '步兵',
+              icon: '🗡️',
+              count: 10,
+              attack: 5,
+              defense: 3
+            });
+          }
+          this.addMessage('召唤步兵 x10');
+        }
+        this.inventory.splice(index, 1);
+      }
     },
     
     // 渲染
@@ -629,6 +1025,7 @@ export default {
 .hero-info { display: flex; align-items: center; gap: 10px; }
 .hero-name { color: #ffd700; font-weight: bold; }
 .hero-level { color: #7fff7f; }
+.hero-stats-mini { font-size: 11px; color: #aaa; }
 .hp-bar {
   width: 80px;
   height: 10px;
@@ -731,7 +1128,100 @@ export default {
 
 .map-area.unlocked { background: rgba(102,126,234,0.3); }
 .map-area.current { border: 2px solid #ffd700; }
-.map-area:not(.unlocked) { opacity: 0.5; cursor: not-allowed; }
+/* 商店样式 */
+.shop-panel { min-width: 320px; max-width: 90vw; max-height: 80vh; overflow-y: auto; }
+.shop-tabs {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 15px;
+}
+.shop-tabs button {
+  flex: 1;
+  padding: 8px;
+  background: rgba(255,255,255,0.1);
+  border: none;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.shop-tabs button.active {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+}
+.shop-items { display: flex; flex-direction: column; gap: 8px; }
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.shop-item:hover { background: rgba(102,126,234,0.3); transform: scale(1.02); }
+.item-icon { font-size: 24px; width: 35px; text-align: center; }
+.item-info { flex: 1; display: flex; flex-direction: column; }
+.item-name { font-weight: bold; }
+.item-stats { font-size: 11px; opacity: 0.7; }
+.item-price { color: #ffd700; font-weight: bold; }
+
+/* 装备面板样式 */
+.equipment-panel { min-width: 300px; max-height: 80vh; overflow-y: auto; }
+.section-title { 
+  font-size: 12px; 
+  color: #888; 
+  margin-bottom: 8px; 
+  text-transform: uppercase;
+}
+.equipped-section { margin-bottom: 15px; }
+.equipped-slots { display: flex; flex-direction: column; gap: 8px; }
+.equip-slot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 8px;
+}
+.equip-slot.empty { opacity: 0.5; }
+.slot-label { 
+  width: 40px; 
+  font-size: 12px; 
+  color: #888; 
+}
+.empty-slot { color: #666; }
+
+.inventory-section { margin-bottom: 15px; }
+.inventory-grid { 
+  display: grid; 
+  grid-template-columns: repeat(2, 1fr); 
+  gap: 8px; 
+  max-height: 150px; 
+  overflow-y: auto; 
+}
+.inventory-item {
+  padding: 8px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: center;
+}
+.inventory-item:hover { background: rgba(102,126,234,0.3); }
+.empty-inventory { 
+  grid-column: span 2; 
+  text-align: center; 
+  color: #666; 
+  padding: 20px; 
+}
+
+.hero-stats { border-top: 1px solid #667eea; padding-top: 10px; }
+.stats-grid { 
+  display: grid; 
+  grid-template-columns: repeat(2, 1fr); 
+  gap: 8px; 
+  font-size: 13px; 
+}
 
 .area-icon { font-size: 28px; display: block; }
 .area-name { font-size: 12px; }
@@ -739,19 +1229,132 @@ export default {
 .battle-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,0.9);
+  background: rgba(0,0,0,0.95);
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   color: white;
+  z-index: 100;
 }
 
-.battle-title { font-size: 24px; margin-bottom: 20px; }
-.battle-units { display: flex; align-items: center; gap: 30px; }
-.battle-unit { padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; margin: 5px; }
-.battle-unit.enemy { background: rgba(255,0,0,0.2); }
-.vs { font-size: 24px; color: #ff4444; }
+.battle-box {
+  background: rgba(30,30,50,0.95);
+  border: 2px solid #667eea;
+  border-radius: 15px;
+  padding: 20px;
+  width: 90%;
+  max-width: 400px;
+}
+
+.battle-title { 
+  font-size: 22px; 
+  text-align: center;
+  margin-bottom: 15px;
+  color: #ffd700;
+}
+
+.battle-sides {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.battle-side {
+  flex: 1;
+  padding: 10px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+}
+
+.side-label {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 8px;
+}
+
+.hero-card, .unit-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 8px;
+  margin-bottom: 5px;
+}
+
+.unit-card.enemy {
+  background: rgba(255,0,0,0.2);
+  border: 1px solid rgba(255,100,100,0.3);
+}
+
+.card-icon { font-size: 24px; }
+.card-name { font-size: 12px; flex: 1; }
+.card-count { font-size: 11px; color: #ffd700; }
+.card-info { flex: 1; }
+.hp-bar-mini {
+  width: 60px;
+  height: 6px;
+  background: #333;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.hp-bar-mini .hp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff4444, #ff6666);
+  transition: width 0.3s;
+}
+
+.boss-badge {
+  background: #ff4444;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.battle-vs {
+  font-size: 20px;
+  color: #ff4444;
+  padding-top: 40px;
+}
+
+.battle-log {
+  max-height: 100px;
+  overflow-y: auto;
+  background: rgba(0,0,0,0.3);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 15px;
+}
+
+.log-item {
+  font-size: 12px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.log-item.our { color: #7fff7f; }
+.log-item.enemy { color: #ff7f7f; }
+.log-item.info { color: #aaddff; }
+.log-item.warning { color: #ffaa00; }
+
+.battle-progress {
+  margin-top: 10px;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #333;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  transition: width 0.15s;
+}
 
 .message-log {
   position: absolute;
