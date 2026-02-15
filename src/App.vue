@@ -31,11 +31,47 @@
     <div class="bottom-bar">
       <button @click="showArmy = !showArmy">⚔️部队</button>
       <button @click="showShop = !showShop">🏪商店</button>
-      <button @click="showEquipment = !showEquipment">🎒装备</button>
+      <button @click="showPets = !showPets">🐾宠物</button>
       <button @click="showDaily = !showDaily">📋任务</button>
       <button @click="showSkills = !showSkills">🔥技能</button>
       <button @click="autoBattle = !autoBattle" :class="{ active: autoBattle }">🤖自动</button>
       <button @click="saveGame">💾存档</button>
+    </div>
+    
+    <!-- 宠物面板 -->
+    <div class="panel pets-panel" v-if="showPets">
+      <div class="panel-header">
+        <span>🐾 宠物</span>
+        <button @click="showPets = false">×</button>
+      </div>
+      <div class="current-pet" v-if="activePet">
+        <span>当前宠物: {{ activePet.icon }} {{ activePet.name }} ({{ activePet.desc }})</span>
+      </div>
+      <div class="pets-list">
+        <div class="pet-item" v-for="pet in pets" :key="pet.id" :class="{ owned: pet.owned, active: activePet?.id === pet.id }">
+          <span class="pet-icon">{{ pet.icon }}</span>
+          <div class="pet-info">
+            <span class="pet-name">{{ pet.name }}</span>
+            <span class="pet-desc">{{ pet.desc }}</span>
+          </div>
+          <button 
+            v-if="!pet.owned" 
+            @click="buyPet(pet)"
+            :disabled="resources.gold < pet.price"
+            class="buy-pet-btn"
+          >
+            💰{{ pet.price }}
+          </button>
+          <button 
+            v-if="pet.owned && activePet?.id !== pet.id" 
+            @click="equipPet(pet)"
+            class="equip-pet-btn"
+          >
+            装备
+          </button>
+          <span v-if="activePet?.id === pet.id" class="active-badge">装备中</span>
+        </div>
+      </div>
     </div>
     
     <!-- 日常任务面板 -->
@@ -419,6 +455,7 @@ export default {
       showAchievements: false,
       showEnhance: false,
       showDaily: false,
+      showPets: false,
       autoBattle: false, // 自动战斗模式
       showSaveToast: false,
       saveToastMsg: '',
@@ -458,6 +495,16 @@ export default {
         { id: 4, name: '升级1次', target: 1, current: 0, reward: { gold: 150 }, completed: false },
         { id: 5, name: '招募任意兵种', target: 1, current: 0, reward: { gold: 80 }, completed: false },
       ],
+      
+      // 宠物系统
+      pets: [
+        { id: 1, name: '小精灵', icon: '🧚', bonus: { attack: 5 }, desc: '攻击+5', owned: false, price: 500 },
+        { id: 2, name: '火元素', icon: '🔥', bonus: { critDamage: 20 }, desc: '暴击伤害+20%', owned: false, price: 800 },
+        { id: 3, name: '冰霜狼', icon: '🐺', bonus: { defense: 10 }, desc: '防御+10', owned: false, price: 600 },
+        { id: 4, name: '凤凰', icon: '🦅', bonus: { expBonus: 20 }, desc: '经验+20%', owned: false, price: 1000 },
+        { id: 5, name: '石像鬼', icon: '🗿', bonus: { goldBonus: 15 }, desc: '金币+15%', owned: false, price: 700 },
+      ],
+      activePet: null,
       
       // 英雄
       hero: {
@@ -562,11 +609,13 @@ export default {
       if (this.hero.equipment.accessory && this.hero.equipment.accessory.type === '攻击') {
         atk += this.hero.equipment.accessory.bonus;
       }
+      atk += this.getPetBonus('attack');
       return atk;
     },
     totalDefense() {
       let def = this.hero.defense;
       if (this.hero.equipment.armor) def += this.hero.equipment.armor.bonus;
+      def += this.getPetBonus('defense');
       return def;
     },
     ourBattlePower() {
@@ -1024,9 +1073,12 @@ export default {
 
       if (ourPower * critMultiplier > theirPower) {
         const expGain = enemy.exp * critMultiplier;
-        this.addMessage(`胜利！+${Math.floor(expGain)} 经验`);
-        this.hero.exp += Math.floor(expGain);
-        this.resources.gold += enemy.gold || 20;
+        const expBonus = 1 + this.getPetBonus('expBonus') / 100;
+        this.hero.exp += Math.floor(expGain * expBonus);
+        this.addMessage(`胜利！+${Math.floor(expGain * expBonus)} 经验`);
+        
+        const goldBonus = 1 + this.getPetBonus('goldBonus') / 100;
+        this.resources.gold += Math.floor((enemy.gold || 20) * goldBonus);
 
         // Boss战额外奖励
         if (enemy.isBoss) {
@@ -1385,6 +1437,30 @@ export default {
       if (task.reward.skillPoint) this.skillPoints += task.reward.skillPoint;
       
       this.addMessage(`📋 任务完成！获得奖励！`);
+    },
+    
+    // 宠物系统
+    buyPet(pet) {
+      if (this.resources.gold < pet.price) {
+        this.addMessage('金币不足！');
+        return;
+      }
+      if (pet.owned) return;
+      
+      this.resources.gold -= pet.price;
+      pet.owned = true;
+      this.addMessage(`获得宠物: ${pet.icon} ${pet.name}！`);
+    },
+    
+    equipPet(pet) {
+      if (!pet.owned) return;
+      this.activePet = pet;
+      this.addMessage(`装备宠物: ${pet.icon} ${pet.name}`);
+    },
+    
+    getPetBonus(type) {
+      if (!this.activePet) return 0;
+      return this.activePet.bonus[type] || 0;
     },
     
     // 存档系统
@@ -2093,4 +2169,40 @@ export default {
   font-weight: bold;
 }
 .completed-badge { color: #4CAF50; font-size: 18px; }
+
+/* 宠物面板样式 */
+.pets-panel { min-width: 300px; }
+.current-pet { 
+  padding: 10px; 
+  background: rgba(102,126,234,0.2); 
+  border-radius: 8px; 
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.pets-list { display: flex; flex-direction: column; gap: 8px; }
+.pet-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.pet-item.owned { border-color: #4CAF50; }
+.pet-item.active { background: rgba(102,126,234,0.3); border-color: #667eea; }
+.pet-icon { font-size: 28px; }
+.pet-info { flex: 1; }
+.pet-name { font-weight: bold; display: block; }
+.pet-desc { font-size: 11px; color: #888; }
+.buy-pet-btn, .equip-pet-btn {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.buy-pet-btn { background: linear-gradient(135deg, #FFD700, #FFA500); color: #333; }
+.buy-pet-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.equip-pet-btn { background: linear-gradient(135deg, #4CAF50, #8BC34A); color: white; }
+.active-badge { color: #667eea; font-size: 12px; font-weight: bold; }
 </style>
