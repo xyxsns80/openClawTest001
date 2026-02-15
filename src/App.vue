@@ -38,10 +38,44 @@
         <button @click="showArmy = false">×</button>
       </div>
       <div class="army-list">
-        <div class="army-unit" v-for="(unit, index) in army" :key="index">
-          <span>{{ unit.icon }}</span>
-          <span>{{ unit.name }}</span>
-          <span>x{{ unit.count }}</span>
+        <div class="army-unit" v-for="(unit, index) in army" :key="index" @click="showUnitInfo(unit)">
+          <span class="unit-icon">{{ unit.icon }}</span>
+          <div class="unit-details">
+            <span class="unit-name">{{ unit.name }}</span>
+            <span class="unit-stats">⚔️{{ unit.attack }} 🛡️{{ unit.defense }}</span>
+          </div>
+          <span class="unit-count">x{{ unit.count }}</span>
+        </div>
+        <div v-if="army.length === 0" class="empty-army">暂无部队</div>
+      </div>
+    </div>
+    
+    <!-- 单位详情弹窗 -->
+    <div class="panel unit-info-panel" v-if="selectedUnit">
+      <div class="panel-header">
+        <span>{{ selectedUnit.icon }} {{ selectedUnit.name }}</span>
+        <button @click="selectedUnit = null">×</button>
+      </div>
+      <div class="unit-info-content">
+        <div class="info-row">
+          <span class="info-label">数量</span>
+          <span class="info-value">x{{ selectedUnit.count }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">攻击力</span>
+          <span class="info-value">⚔️ {{ selectedUnit.attack }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">防御力</span>
+          <span class="info-value">🛡️ {{ selectedUnit.defense }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">总攻击</span>
+          <span class="info-value highlight">⚔️ {{ selectedUnit.attack * selectedUnit.count }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">总防御</span>
+          <span class="info-value highlight">🛡️ {{ selectedUnit.defense * selectedUnit.count }}</span>
         </div>
       </div>
     </div>
@@ -245,6 +279,7 @@ export default {
       shopTab: 'units',
       inBattle: false,
       messages: [],
+      selectedUnit: null,
       
       // 英雄
       hero: {
@@ -600,18 +635,17 @@ export default {
         // 传送动画效果
         this.addMessage(`🌀 传送门启动...`);
         
-        setTimeout(() => {
-          this.currentRegion = gate.targetRegion;
-          // 传送到新区域的起始位置
-          this.hero.x = 3;
-          this.hero.y = this.currentRegion * 6 + 2;
-          this.addMessage(`📍 传送到区域 ${this.currentRegion + 1}`);
-          
-          // 检查是否完成整个区域
-          if (this.currentRegion >= this.regionCount - 1 && this.enemiesRemaining === 0) {
-            this.completeArea();
-          }
-        }, 500);
+        // 立即执行传送
+        this.currentRegion = gate.targetRegion;
+        // 传送到新区域的起始位置
+        this.hero.x = 3;
+        this.hero.y = this.currentRegion * 6 + 2;
+        this.addMessage(`📍 传送到区域 ${this.currentRegion + 1}`);
+        
+        // 检查是否完成整个区域
+        if (this.currentRegion >= this.regionCount - 1 && this.enemiesRemaining === 0) {
+          this.completeArea();
+        }
       }
     },
     
@@ -973,6 +1007,10 @@ export default {
       ctx.restore();
     },
     
+    showUnitInfo(unit) {
+      this.selectedUnit = unit;
+    },
+    
     handleKeyDown(e) { this.keys[e.key] = true; },
     handleKeyUp(e) { this.keys[e.key] = false; },
     
@@ -1135,10 +1173,25 @@ export default {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px;
+  padding: 10px;
   background: rgba(255,255,255,0.1);
-  border-radius: 5px;
+  border-radius: 8px;
+  cursor: pointer;
 }
+.army-unit:hover { background: rgba(102,126,234,0.3); }
+.army-unit .unit-icon { font-size: 24px; }
+.army-unit .unit-details { flex: 1; display: flex; flex-direction: column; }
+.army-unit .unit-name { font-weight: bold; }
+.army-unit .unit-stats { font-size: 11px; color: #888; }
+.army-unit .unit-count { font-size: 16px; color: #ffd700; }
+.empty-army { text-align: center; color: #666; padding: 20px; }
+
+.unit-info-panel { min-width: 280px; }
+.unit-info-content { display: flex; flex-direction: column; gap: 10px; }
+.info-row { display: flex; justify-content: space-between; padding: 8px; background: rgba(255,255,255,0.05); border-radius: 5px; }
+.info-label { color: #888; }
+.info-value { font-weight: bold; }
+.info-value.highlight { color: #ffd700; }
 
 .world-map {
   display: grid;
