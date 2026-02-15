@@ -29,13 +29,14 @@
     
     <!-- 底部操作栏 -->
     <div class="bottom-bar">
-      <button @click="showArmy = !showArmy">⚔️部队</button>
-      <button @click="showShop = !showShop">🏪商店</button>
-      <button @click="showPets = !showPets">🐾宠物</button>
-      <button @click="showDaily = !showDaily">📋任务</button>
-      <button @click="showSkills = !showSkills">🔥技能</button>
-      <button @click="autoBattle = !autoBattle" :class="{ active: autoBattle }">🤖自动</button>
-      <button @click="saveGame">💾存档</button>
+      <button @click="showArmy = !showArmy" data-tooltip="部队">⚔️</button>
+      <button @click="showShop = !showShop" data-tooltip="商店">🏪</button>
+      <button @click="showPets = !showPets" data-tooltip="宠物">🐾</button>
+      <button @click="showDaily = !showDaily" data-tooltip="任务">📋</button>
+      <button @click="showSkills = !showSkills" data-tooltip="技能">🔥</button>
+      <button @click="showEnhance = !showEnhance" data-tooltip="强化">⚒️</button>
+      <button @click="autoBattle = !autoBattle" :class="{ active: autoBattle }" data-tooltip="自动战斗">🤖</button>
+      <button @click="saveGame" data-tooltip="存档">💾</button>
     </div>
     
     <!-- 宠物面板 -->
@@ -1680,12 +1681,26 @@ export default {
 }
 
 .bottom-bar button {
-  padding: 10px 20px;
+  padding: 10px 15px;
   background: linear-gradient(135deg, #667eea, #764ba2);
   color: white;
   border: none;
   border-radius: 5px;
-  font-size: 14px;
+  font-size: 18px;
+  position: relative;
+  cursor: pointer;
+}
+.bottom-bar button:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.9);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 .bottom-bar button.active {
   background: linear-gradient(135deg, #4CAF50, #8BC34A);
@@ -2205,4 +2220,48 @@ export default {
 .buy-pet-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .equip-pet-btn { background: linear-gradient(135deg, #4CAF50, #8BC34A); color: white; }
 .active-badge { color: #667eea; font-size: 12px; font-weight: bold; }
+
+/* 响应式设计 */
+@media (max-width: 600px) {
+  .bottom-bar {
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 5px;
+  }
+  .bottom-bar button {
+    padding: 8px 12px;
+    font-size: 12px;
+    flex: 1;
+    min-width: 60px;
+  }
+  .panel {
+    width: 95%;
+    max-width: 95%;
+    padding: 15px;
+    font-size: 14px;
+  }
+  .top-bar {
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+  .hp-bar { width: 60px; }
+  .exp-bar { width: 50px; }
+  .area-info { font-size: 11px; }
+  .skill-bar {
+    bottom: 65px;
+    right: 5px;
+  }
+  .skill-slot {
+    width: 40px;
+    height: 40px;
+  }
+  .skill-icon { font-size: 20px; }
+}
+
+@media (max-height: 600px) {
+  .panel {
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+}
 </style>
