@@ -28,7 +28,7 @@
       <button @click="showArmy = !showArmy">⚔️部队</button>
       <button @click="showShop = !showShop">🏪商店</button>
       <button @click="showEquipment = !showEquipment">🎒装备</button>
-      <button @click="showMap = !showMap">🗺️地图</button>
+      <button @click="showEnhance = !showEnhance">⚒️强化</button>
       <button @click="showSkills = !showSkills">🔥技能</button>
       <button @click="saveGame">💾存档</button>
     </div>
@@ -142,6 +142,34 @@
         <div class="info-row">
           <span class="info-label">总防御</span>
           <span class="info-value highlight">🛡️ {{ selectedUnit.defense * selectedUnit.count }}</span>
+        </div>
+        <div class="unit-actions" v-if="!inBattle">
+          <button @click="reinforceUnit(selectedUnit)" :disabled="resources.gold < 50">
+            增援 (50金)
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 装备强化面板 -->
+    <div class="panel enhance-panel" v-if="showEnhance">
+      <div class="panel-header">
+        <span>⚒️ 装备强化</span>
+        <button @click="showEnhance = false">×</button>
+      </div>
+      <div class="enhance-list">
+        <div class="enhance-item" v-for="(item, i) in equippableItems" :key="i">
+          <span class="item-icon">{{ item.icon }}</span>
+          <div class="item-info">
+            <span class="item-name">{{ item.name }}</span>
+            <span class="item-stats">+{{ item.bonus }} {{ item.type }} (Lv.{{ item.enhanceLevel || 0 }})</span>
+          </div>
+          <button 
+            @click="enhanceItem(item, i)" 
+            :disabled="resources.gold < getEnhanceCost(item)"
+          >
+            强化 ({{ getEnhanceCost(item) }}金)
+          </button>
         </div>
       </div>
     </div>
@@ -344,6 +372,7 @@ export default {
       showEquipment: false,
       showSkills: false,
       showAchievements: false,
+      showEnhance: false,
       showSaveToast: false,
       saveToastMsg: '',
       shopTab: 'units',
@@ -487,6 +516,9 @@ export default {
     },
     enemyBattlePower() {
       return this.battleEnemies.reduce((s, e) => s + e.attack * (e.count || 1), 0);
+    },
+    equippableItems() {
+      return this.inventory.filter(i => i.isEquipment);
     }
   },
   mounted() {
@@ -616,6 +648,10 @@ export default {
         { name: '哥布林', icon: '👺', hp: 20, attack: 4, exp: 10, gold: 15 },
         { name: '骷髅', icon: '💀', hp: 25, attack: 6, exp: 15, gold: 20 },
         { name: '兽人', icon: '👹', hp: 40, attack: 10, exp: 25, gold: 40 },
+        { name: '狼人', icon: '🐺', hp: 35, attack: 12, exp: 30, gold: 35 },
+        { name: '亡灵', icon: '👻', hp: 30, attack: 8, exp: 20, gold: 25 },
+        { name: '精灵弓手', icon: '🧝', hp: 25, attack: 15, exp: 35, gold: 50 },
+        { name: '黑骑士', icon: '🖤', hp: 60, attack: 18, exp: 50, gold: 80 },
       ];
       
       // Boss列表
@@ -623,6 +659,7 @@ export default {
         { name: '哥布林王', icon: '👑', hp: 100, attack: 15, exp: 100, gold: 200, isBoss: true },
         { name: '森林巨魔', icon: '🌳', hp: 150, attack: 20, exp: 150, gold: 300, isBoss: true },
         { name: '石像巨人', icon: '🗿', hp: 200, attack: 25, exp: 200, gold: 400, isBoss: true },
+        { name: '黑暗领主', icon: '🦹', hp: 300, attack: 35, exp: 500, gold: 800, isBoss: true },
         { name: '魔王', icon: '😈', hp: 500, attack: 50, exp: 1000, gold: 2000, isBoss: true },
       ];
 
@@ -1162,6 +1199,36 @@ export default {
       skill.currentCd = skill.cooldown;
     },
     
+    // 部队增援
+    reinforceUnit(unit) {
+      if (this.resources.gold < 50) {
+        this.addMessage('金币不足！');
+        return;
+      }
+      this.resources.gold -= 50;
+      unit.count += Math.ceil(unit.count * 0.2); // 增加20%数量
+      this.addMessage(`${unit.icon} ${unit.name} 增援成功！`);
+    },
+    
+    // 装备强化
+    getEnhanceCost(item) {
+      const level = item.enhanceLevel || 0;
+      return (level + 1) * 100;
+    },
+    
+    enhanceItem(item, index) {
+      const cost = this.getEnhanceCost(item);
+      if (this.resources.gold < cost) {
+        this.addMessage('金币不足！');
+        return;
+      }
+      
+      this.resources.gold -= cost;
+      item.enhanceLevel = (item.enhanceLevel || 0) + 1;
+      item.bonus += Math.ceil(item.bonus * 0.1); // 提升10%
+      this.addMessage(`${item.icon} ${item.name} 强化至 Lv.${item.enhanceLevel}！`);
+    },
+    
     // 存档系统
     saveGame() {
       const saveData = {
@@ -1409,6 +1476,38 @@ export default {
 .info-label { color: #888; }
 .info-value { font-weight: bold; }
 .info-value.highlight { color: #ffd700; }
+.unit-actions { margin-top: 15px; }
+.unit-actions button {
+  width: 100%;
+  padding: 10px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.unit-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 强化面板样式 */
+.enhance-panel { min-width: 300px; max-height: 80vh; overflow-y: auto; }
+.enhance-list { display: flex; flex-direction: column; gap: 8px; }
+.enhance-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 8px;
+}
+.enhance-item button {
+  padding: 5px 10px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.enhance-item button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .world-map {
   display: grid;
