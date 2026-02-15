@@ -586,7 +586,7 @@ export default {
       
       // 检查当前区域是否清空
       if (this.enemiesRemaining > 0) {
-        this.addMessage('还有敌人，无法通过！');
+        this.addMessage('还有敌人，传送门无法激活！');
         return;
       }
       
@@ -597,14 +597,21 @@ export default {
       }
       
       if (gate.targetRegion < this.regionCount) {
-        this.currentRegion = gate.targetRegion;
-        this.hero.y = y + 1;
-        this.addMessage(`进入区域 ${this.currentRegion + 1}`);
+        // 传送动画效果
+        this.addMessage(`🌀 传送门启动...`);
         
-        // 检查是否完成整个区域
-        if (this.currentRegion >= this.regionCount - 1 && this.enemiesRemaining === 0) {
-          this.completeArea();
-        }
+        setTimeout(() => {
+          this.currentRegion = gate.targetRegion;
+          // 传送到新区域的起始位置
+          this.hero.x = 3;
+          this.hero.y = this.currentRegion * 6 + 2;
+          this.addMessage(`📍 传送到区域 ${this.currentRegion + 1}`);
+          
+          // 检查是否完成整个区域
+          if (this.currentRegion >= this.regionCount - 1 && this.enemiesRemaining === 0) {
+            this.completeArea();
+          }
+        }, 500);
       }
     },
     
@@ -683,27 +690,48 @@ export default {
         progress += 10;
         this.battleProgress = progress;
         
-        // 添加战斗日志
-        if (progress === 30) {
-          this.battleLog.push({ text: `我方发起攻击...`, type: 'our' });
+        // 添加战斗日志 - 区分伤害来源
+        if (progress === 20) {
+          // 英雄攻击
+          const heroDmg = Math.floor(this.totalAttack * 0.5);
+          this.battleLog.push({ text: `🧙 ${this.hero.name} 攻击，造成 ${heroDmg} 伤害！`, type: 'our' });
         }
-        if (progress === 50) {
-          const damage = Math.floor(this.ourBattlePower * 0.3);
-          this.battleLog.push({ text: `造成 ${damage} 点伤害！`, type: 'our' });
+        if (progress === 40) {
+          // 部队攻击
+          if (this.army.length > 0) {
+            const unit = this.army[Math.floor(Math.random() * this.army.length)];
+            const unitDmg = Math.floor(unit.attack * unit.count * 0.4);
+            this.battleLog.push({ text: `${unit.icon} ${unit.name} x${unit.count} 攻击，造成 ${unitDmg} 伤害！`, type: 'our' });
+          } else {
+            this.battleLog.push({ text: `部队全军覆没...`, type: 'warning' });
+          }
         }
-        if (progress === 70) {
-          this.battleLog.push({ text: `敌方反击...`, type: 'enemy' });
+        if (progress === 60) {
+          // 敌方反击 - 英雄受伤
+          const enemyAtk = this.battleEnemies.reduce((s, e) => s + e.attack * (e.count || 1), 0);
+          const heroDmg = Math.max(1, Math.floor(enemyAtk * 0.3) - this.totalDefense);
+          this.hero.hp = Math.max(0, this.hero.hp - heroDmg);
+          this.battleLog.push({ text: `敌方攻击 🧙 ${this.hero.name}，受到 ${heroDmg} 伤害！`, type: 'enemy' });
         }
-        if (progress === 90) {
-          const enemyDmg = Math.floor(this.enemyBattlePower * 0.2);
-          this.battleLog.push({ text: `受到 ${enemyDmg} 点伤害！`, type: 'enemy' });
+        if (progress === 80) {
+          // 敌方攻击部队
+          if (this.army.length > 0) {
+            const unit = this.army[Math.floor(Math.random() * this.army.length)];
+            const loss = Math.min(unit.count, Math.floor(Math.random() * 3) + 1);
+            unit.count -= loss;
+            this.battleLog.push({ text: `敌方攻击 ${unit.icon} ${unit.name}，损失 x${loss}！`, type: 'enemy' });
+            if (unit.count <= 0) {
+              this.army = this.army.filter(u => u.count > 0);
+              this.battleLog.push({ text: `${unit.icon} ${unit.name} 全军覆没！`, type: 'warning' });
+            }
+          }
         }
         
         if (progress >= 100) {
           clearInterval(interval);
           this.resolveBattle(enemy);
         }
-      }, 150);
+      }, 200);
     },
     
     resolveBattle(enemy) {
