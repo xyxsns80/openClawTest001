@@ -30,6 +30,12 @@
       <button @click="showEquipment = !showEquipment">🎒装备</button>
       <button @click="showMap = !showMap">🗺️地图</button>
       <button @click="showSkills = !showSkills">🔥技能</button>
+      <button @click="saveGame">💾存档</button>
+    </div>
+    
+    <!-- 存档提示 -->
+    <div class="save-toast" v-if="showSaveToast">
+      {{ saveToastMsg }}
     </div>
     
     <!-- 技能栏（战斗中显示） -->
@@ -338,6 +344,8 @@ export default {
       showEquipment: false,
       showSkills: false,
       showAchievements: false,
+      showSaveToast: false,
+      saveToastMsg: '',
       shopTab: 'units',
       inBattle: false,
       messages: [],
@@ -394,6 +402,9 @@ export default {
         { id: 3, name: '骑士', icon: '🐴', attack: 12, defense: 8, price: 150, count: 2 },
         { id: 4, name: '法师', icon: '🔮', attack: 15, defense: 1, price: 200, count: 2 },
         { id: 5, name: '天使', icon: '👼', attack: 25, defense: 15, price: 500, count: 1 },
+        { id: 6, name: '巨龙', icon: '🐉', attack: 40, defense: 20, price: 1000, count: 1 },
+        { id: 7, name: '泰坦', icon: '🗿', attack: 35, defense: 25, price: 800, count: 1 },
+        { id: 8, name: '恶魔', icon: '😈', attack: 50, defense: 10, price: 1200, count: 1 },
       ],
 
       // 商店 - 装备
@@ -498,8 +509,13 @@ export default {
       this.canvas.addEventListener('touchstart', this.handleTouch);
       this.canvas.addEventListener('click', this.handleClick);
       
-      this.currentArea = this.worldMap[0];
-      this.currentRegion = 0;
+      // 尝试加载存档
+      if (this.loadGame()) {
+        this.addMessage('💾 存档已加载！');
+      }
+      
+      this.currentArea = this.currentArea || this.worldMap[0];
+      this.currentRegion = this.currentRegion || 0;
       this.generateMap();
       
       this.gameLoop();
@@ -1146,6 +1162,52 @@ export default {
       skill.currentCd = skill.cooldown;
     },
     
+    // 存档系统
+    saveGame() {
+      const saveData = {
+        hero: this.hero,
+        army: this.army,
+        resources: this.resources,
+        inventory: this.inventory,
+        skills: this.skills,
+        skillPoints: this.skillPoints,
+        achievements: this.achievements,
+        totalGoldEarned: this.totalGoldEarned,
+        worldMap: this.worldMap,
+        currentArea: this.currentArea,
+        currentRegion: this.currentRegion,
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem('heroGame_save', JSON.stringify(saveData));
+      this.saveToastMsg = '💾 游戏已保存！';
+      this.showSaveToast = true;
+      setTimeout(() => this.showSaveToast = false, 2000);
+    },
+    
+    loadGame() {
+      const saved = localStorage.getItem('heroGame_save');
+      if (!saved) return false;
+      
+      try {
+        const data = JSON.parse(saved);
+        this.hero = data.hero || this.hero;
+        this.army = data.army || this.army;
+        this.resources = data.resources || this.resources;
+        this.inventory = data.inventory || [];
+        this.skills = data.skills || this.skills;
+        this.skillPoints = data.skillPoints || 0;
+        this.achievements = data.achievements || this.achievements;
+        this.totalGoldEarned = data.totalGoldEarned || 0;
+        this.worldMap = data.worldMap || this.worldMap;
+        this.currentArea = data.currentArea || this.worldMap[0];
+        this.currentRegion = data.currentRegion || 0;
+        return true;
+      } catch(e) {
+        return false;
+      }
+    },
+    
     checkAchievement(condition) {
       const ach = this.achievements.find(a => a.condition === condition && !a.unlocked);
       if (!ach) return;
@@ -1685,5 +1747,19 @@ export default {
   border-radius: 3px;
   color: white;
   font-size: 12px;
+}
+
+.save-toast {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.9);
+  padding: 15px 30px;
+  border-radius: 10px;
+  color: #7fff7f;
+  font-size: 18px;
+  font-weight: bold;
+  z-index: 1000;
 }
 </style>
