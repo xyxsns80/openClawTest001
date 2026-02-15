@@ -67,8 +67,8 @@
         <div class="skill-item" v-for="skill in skills" :key="skill.id">
           <span class="skill-icon">{{ skill.icon }}</span>
           <div class="skill-info">
-            <span class="skill-name">{{ skill.name }}</span>
-            <span class="skill-desc">{{ skill.desc }}</span>
+            <span class="skill-name">{{ skill.name }} <span class="skill-level">Lv.{{ skill.level }}</span></span>
+            <span class="skill-desc">{{ getSkillDesc(skill) }}</span>
             <span class="skill-cd-info">冷却: {{ skill.cooldown }}回合</span>
           </div>
           <button 
@@ -78,7 +78,14 @@
           >
             解锁
           </button>
-          <span v-if="skill.unlocked" class="unlocked-badge">✓</span>
+          <button 
+            v-if="skill.unlocked && skillPoints > 0 && skill.level < 10" 
+            @click="upgradeSkill(skill)"
+            class="upgrade-btn"
+          >
+            升级
+          </button>
+          <span v-if="skill.unlocked && skill.level >= 10" class="max-badge">MAX</span>
         </div>
       </div>
     </div>
@@ -388,10 +395,10 @@ export default {
       
       // 技能系统
       skills: [
-        { id: 1, name: '火焰冲击', icon: '🔥', desc: '造成200%攻击伤害', cooldown: 3, currentCd: 0, unlocked: true },
-        { id: 2, name: '雷霆一击', icon: '⚡', desc: '造成150%伤害+眩晕', cooldown: 5, currentCd: 0, unlocked: false },
-        { id: 3, name: '治愈之光', icon: '💚', desc: '恢复30%最大HP', cooldown: 4, currentCd: 0, unlocked: false },
-        { id: 4, name: '战吼', icon: '📢', desc: '本次战斗攻击+50%', cooldown: 6, currentCd: 0, unlocked: false },
+        { id: 1, name: '火焰冲击', icon: '🔥', desc: '造成攻击力伤害', baseMult: 2, level: 1, cooldown: 3, currentCd: 0, unlocked: true },
+        { id: 2, name: '雷霆一击', icon: '⚡', desc: '造成伤害+眩晕', baseMult: 1.5, level: 1, cooldown: 5, currentCd: 0, unlocked: false },
+        { id: 3, name: '治愈之光', icon: '💚', desc: '恢复最大HP', baseHeal: 0.3, level: 1, cooldown: 4, currentCd: 0, unlocked: false },
+        { id: 4, name: '战吼', icon: '📢', desc: '提升攻击力', baseBuff: 0.5, level: 1, cooldown: 6, currentCd: 0, unlocked: false },
       ],
       skillPoints: 0,
       battleBuff: 1,
@@ -1226,29 +1233,49 @@ export default {
       }
     },
     
+    upgradeSkill(skill) {
+      if (this.skillPoints > 0 && skill.unlocked && skill.level < 10) {
+        skill.level++;
+        this.skillPoints--;
+        this.addMessage(`${skill.icon} ${skill.name} 升级至 Lv.${skill.level}！`);
+      }
+    },
+    
+    getSkillDesc(skill) {
+      const level = skill.level;
+      switch(skill.id) {
+        case 1: return `造成 ${(skill.baseMult + level * 0.1).toFixed(1)}倍攻击伤害`;
+        case 2: return `造成 ${(skill.baseMult + level * 0.1).toFixed(1)}倍伤害+眩晕`;
+        case 3: return `恢复 ${(skill.baseHeal + level * 0.02) * 100}% 最大HP`;
+        case 4: return `攻击力 +${((skill.baseBuff + level * 0.05) * 100).toFixed(0)}%`;
+      }
+    },
+    
     useSkill(skill) {
       if (!this.inBattle || skill.currentCd > 0) return;
       
       const enemy = this.battleEnemies[0];
       if (!enemy) return;
       
+      const level = skill.level;
+      
       switch(skill.id) {
         case 1: // 火焰冲击
-          const fireDmg = Math.floor(this.totalAttack * 2 * this.battleBuff);
+          const fireDmg = Math.floor(this.totalAttack * (skill.baseMult + level * 0.1) * this.battleBuff);
           this.battleLog.push({ text: `🔥 火焰冲击！造成 ${fireDmg} 火焰伤害！`, type: 'our' });
           break;
         case 2: // 雷霆一击
-          const thunderDmg = Math.floor(this.totalAttack * 1.5 * this.battleBuff);
+          const thunderDmg = Math.floor(this.totalAttack * (skill.baseMult + level * 0.1) * this.battleBuff);
           this.battleLog.push({ text: `⚡ 雷霆一击！造成 ${thunderDmg} 伤害，敌人眩晕！`, type: 'our' });
           break;
         case 3: // 治愈之光
-          const heal = Math.floor(this.hero.maxHp * 0.3);
+          const heal = Math.floor(this.hero.maxHp * (skill.baseHeal + level * 0.02));
           this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + heal);
           this.battleLog.push({ text: `💚 治愈之光！恢复 ${heal} HP！`, type: 'our' });
           break;
         case 4: // 战吼
-          this.battleBuff = 1.5;
-          this.battleLog.push({ text: `📢 战吼！攻击力提升50%！`, type: 'our' });
+          this.battleBuff = 1 + skill.baseBuff + level * 0.05;
+          this.battleLog.push({ text: `📢 战吼！攻击力提升${((skill.baseBuff + level * 0.05) * 100).toFixed(0)}%！`, type: 'our' });
           break;
       }
       
@@ -1697,6 +1724,7 @@ export default {
 .skill-item .skill-icon { font-size: 28px; }
 .skill-info { flex: 1; display: flex; flex-direction: column; }
 .skill-name { font-weight: bold; }
+.skill-level { color: #ffd700; font-size: 11px; }
 .skill-desc { font-size: 11px; color: #888; }
 .skill-cd-info { font-size: 10px; color: #667eea; }
 .unlock-btn {
@@ -1707,7 +1735,16 @@ export default {
   border-radius: 5px;
   cursor: pointer;
 }
+.upgrade-btn {
+  padding: 5px 10px;
+  background: linear-gradient(135deg, #4CAF50, #8BC34A);
+  border: none;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+}
 .unlocked-badge { color: #7fff7f; font-size: 18px; }
+.max-badge { color: #ffd700; font-size: 12px; font-weight: bold; }
 
 /* 成就面板样式 */
 .achievement-list { display: flex; flex-direction: column; gap: 8px; }
